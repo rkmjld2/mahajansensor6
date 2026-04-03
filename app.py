@@ -145,16 +145,34 @@ def query():
 
     rows = list(csv.DictReader(open(DATA_FILE)))
 
-    # SELECT *
+    # ---------- SELECT ALL ----------
     if q == "select *":
         return jsonify(rows)
 
-    # DELETE ID
-    if q.startswith("delete id="):
+    # ---------- SELECT BY DATE ----------
+    elif "select between" in q:
+        try:
+            parts = q.replace("select between","").split("and")
+            start = parts[0].strip()
+            end = parts[1].strip()
+
+            result = []
+            for r in rows:
+                d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
+                if start <= d.strftime("%Y-%m-%d") <= end:
+                    result.append(r)
+
+            return jsonify(result)
+
+        except:
+            return "Invalid Query", 400
+
+    # ---------- DELETE BY ID ----------
+    elif q.startswith("delete id="):
         val = q.split("=")[1]
         rows = [r for r in rows if r["id"] != val]
 
-    # DELETE DATE RANGE
+    # ---------- DELETE BY DATE ----------
     elif "delete between" in q:
         try:
             parts = q.replace("delete between","").split("and")
@@ -166,13 +184,14 @@ def query():
                 return not (start <= d.strftime("%Y-%m-%d") <= end)
 
             rows = [r for r in rows if keep(r)]
+
         except:
             return "Invalid Query", 400
 
     else:
         return "Unsupported Query", 400
 
-    # rewrite file
+    # ---------- WRITE BACK ----------
     with open(DATA_FILE,"w",newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","date"])
         writer.writeheader()
