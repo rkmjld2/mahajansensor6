@@ -1,124 +1,182 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Sensor Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Sensor Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f8;
+            text-align: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            margin: auto;
+            margin-top: 40px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px #ccc;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        #status {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #007bff;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .start { background: green; }
+        .stop { background: red; }
+    </style>
 </head>
 
 <body>
 
-<h2>Dashboard</h2>
+<div class="container">
 
-<button onclick="control('start')">Start</button>
-<button onclick="control('stop')">Stop</button>
+    <h1>📡 Sensor Monitoring System</h1>
 
-<div id="status"></div>
+    <!-- STATUS -->
+    <div id="status">🔴 DISCONNECTED</div>
 
-<hr>
+    <!-- BUTTONS -->
+    <button class="start" onclick="start()">START</button>
+    <button class="stop" onclick="stop()">STOP</button>
 
-<h3>SQL Query</h3>
-<input id="query" style="width:400px">
-<button onclick="runQuery()">Run</button>
+    <h3>Live Data</h3>
 
-<hr>
+    <!-- TABLE -->
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Sensor1</th>
+                <th>Sensor2</th>
+                <th>Sensor3</th>
+                <th>Date</th>
+            </tr>
+        </thead>
 
-<h3>Search</h3>
-From <input type="date" id="start">
-To <input type="date" id="end">
+        <tbody id="tableBody">
+        </tbody>
+    </table>
 
-<button onclick="search()">Search</button>
-<button onclick="download()">Download</button>
-
-<canvas id="chart" width="400" height="150"></canvas>
-
-<table border="1">
-<thead>
-<tr><th>ID</th><th>S1</th><th>S2</th><th>S3</th><th>Date</th></tr>
-</thead>
-<tbody id="data"></tbody>
-</table>
+</div>
 
 <script>
 
-const base = "https://mahajansensor6.onrender.com";
+// =========================
+// STATUS CHECK
+// =========================
+function checkStatus() {
 
-function control(a){
- fetch(base + "/api/control?action="+a);
+    fetch('/api/status')
+    .then(res => res.json())
+    .then(data => {
+
+        let el = document.getElementById("status");
+
+        if (data.status === "CONNECTED") {
+            el.innerHTML = "🟢 CONNECTED";
+            el.style.color = "green";
+        } else {
+            el.innerHTML = "🔴 DISCONNECTED";
+            el.style.color = "red";
+        }
+
+    })
+    .catch(err => {
+        document.getElementById("status").innerHTML = "⚠️ SERVER ERROR";
+    });
 }
 
-function status(){
- fetch(base+"/api/status")
- .then(r=>r.json())
- .then(d=>{
-   document.getElementById("status").innerHTML =
-   "Receiving: "+d.receiving+
-   "<br>ESP Connected: "+d.esp_connected+
-   "<br>Last Seen: "+d.last_seen;
- });
+// =========================
+// LOAD DATA
+// =========================
+function loadData() {
+
+    fetch('/api/all')
+    .then(res => res.json())
+    .then(data => {
+
+        let table = document.getElementById("tableBody");
+        table.innerHTML = "";
+
+        data.reverse().forEach(row => {
+
+            let tr = `<tr>
+                <td>${row.id}</td>
+                <td>${row.sensor1}</td>
+                <td>${row.sensor2}</td>
+                <td>${row.sensor3}</td>
+                <td>${row.date}</td>
+            </tr>`;
+
+            table.innerHTML += tr;
+        });
+    });
 }
 
-function runQuery(){
- fetch(base+"/api/query",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({query:document.getElementById("query").value})
- })
- .then(r=>r.json()).then(show);
+// =========================
+// START / STOP (UI ONLY)
+// =========================
+let receiving = true;
+
+function start() {
+    receiving = true;
+    document.getElementById("status").innerHTML = "🟢 STARTED";
 }
 
-function search(){
- let s=document.getElementById("start").value;
- let e=document.getElementById("end").value;
-
- fetch(`${base}/api/search?start=${s}&end=${e}`)
- .then(r=>r.json())
- .then(d=>{
-   show(d);
-   drawGraph(d);
- });
+function stop() {
+    receiving = false;
+    document.getElementById("status").innerHTML = "🔴 STOPPED";
 }
 
-function download(){
- let s=document.getElementById("start").value;
- let e=document.getElementById("end").value;
- window.location = `${base}/api/download?start=${s}&end=${e}`;
-}
+// =========================
+// AUTO REFRESH
+// =========================
+setInterval(() => {
+    checkStatus();
 
-function show(d){
- let html="";
- d.forEach(r=>{
-  html+=`<tr>
-  <td>${r.id}</td>
-  <td>${r.sensor1}</td>
-  <td>${r.sensor2}</td>
-  <td>${r.sensor3}</td>
-  <td>${r.date}</td>
-  </tr>`;
- });
- document.getElementById("data").innerHTML=html;
-}
+    if (receiving) {
+        loadData();
+    }
 
-function drawGraph(d){
-
- let labels = d.map(x=>x.date);
- let s1 = d.map(x=>x.sensor1);
- let s2 = d.map(x=>x.sensor2);
- let s3 = d.map(x=>x.sensor3);
-
- new Chart(document.getElementById("chart"), {
-   type: 'line',
-   data: {
-     labels: labels,
-     datasets: [
-       {label:"S1",data:s1},
-       {label:"S2",data:s2},
-       {label:"S3",data:s3}
-     ]
-   }
- });
-}
-
-setInterval(status,5000);
+}, 3000);
 
 </script>
 
