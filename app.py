@@ -54,7 +54,7 @@ def receive():
     return "OK"
 
 
-# ---------- GET ALL DATA ----------
+# ---------- GET ALL ----------
 @app.route("/api/all")
 def get_all():
     return jsonify(list(csv.DictReader(open(DATA_FILE))))
@@ -136,3 +136,50 @@ def download():
                      mimetype="text/csv",
                      as_attachment=True,
                      download_name="sensor_data.csv")
+
+
+# ---------- QUERY ----------
+@app.route("/api/query", methods=["POST"])
+def query():
+    q = request.json.get("query","").lower().strip()
+
+    rows = list(csv.DictReader(open(DATA_FILE)))
+
+    # SELECT *
+    if q == "select *":
+        return jsonify(rows)
+
+    # DELETE ID
+    if q.startswith("delete id="):
+        val = q.split("=")[1]
+        rows = [r for r in rows if r["id"] != val]
+
+    # DELETE DATE RANGE
+    elif "delete between" in q:
+        try:
+            parts = q.replace("delete between","").split("and")
+            start = parts[0].strip()
+            end = parts[1].strip()
+
+            def keep(r):
+                d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
+                return not (start <= d.strftime("%Y-%m-%d") <= end)
+
+            rows = [r for r in rows if keep(r)]
+        except:
+            return "Invalid Query", 400
+
+    else:
+        return "Unsupported Query", 400
+
+    # rewrite file
+    with open(DATA_FILE,"w",newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","date"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return jsonify(rows)
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
