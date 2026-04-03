@@ -79,26 +79,17 @@ function show(d){
  });
  document.getElementById("data").innerHTML = html;
 }
-<script>
-function checkStatus() {
-    fetch('/api/status')
-    .then(res => res.json())
-    .then(data => {
-        let el = document.getElementById("status");
 
-        if (data.status === "CONNECTED") {
-            el.innerHTML = "🟢 CONNECTED";
-            el.style.color = "green";
-        } else {
-            el.innerHTML = "🔴 DISCONNECTED";
-            el.style.color = "red";
-        }
-    });
+function status(){
+ fetch(base + "/api/status")
+ .then(r=>r.json())
+ .then(d=>{
+   document.getElementById("status").innerHTML =
+   "Receiving: " + d.receiving +
+   "<br>ESP Connected: " + d.esp_connected +
+   "<br>Last Seen: " + d.last_seen;
+ });
 }
-
-// check every 3 seconds
-setInterval(checkStatus, 3000);
-</script>
 
 function control(a){
  fetch(base + "/api/control?action=" + a);
