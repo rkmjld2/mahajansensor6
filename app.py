@@ -11,8 +11,8 @@ DATA_FILE = os.path.join(BASE_DIR, "data", "sensor_data.csv")
 STATUS_FILE = os.path.join(BASE_DIR, "data", "status.json")
 
 STATUS_FILE = "data/status.json"
+os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 
-os.makedirs("data", exist_ok=True)
 
 # ---------- INIT ----------
 if not os.path.exists(DATA_FILE):
