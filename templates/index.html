@@ -7,19 +7,10 @@
 
 <body style="font-family: Arial; background:#f5f5f5;">
 
-<div style="
-    width:90%;
-    max-width:1000px;
-    margin:auto;
-    background:white;
-    padding:20px;
-    border-radius:10px;
-    box-shadow:0px 0px 10px rgba(0,0,0,0.2);
-">
+<div style="width:90%; max-width:1000px; margin:auto; background:white; padding:20px; border-radius:10px; box-shadow:0px 0px 10px rgba(0,0,0,0.2);">
 
 <h2 style="text-align:center;">Sensor Dashboard</h2>
 
-<!-- CONTROL -->
 <button onclick="control('start')">Start</button>
 <button onclick="control('stop')">Stop</button>
 
@@ -28,7 +19,18 @@
 
 <hr>
 
-<!-- SEARCH -->
+<h3>Query Box</h3>
+<input id="query" style="width:70%">
+<button onclick="runQuery()">Run</button>
+
+<p>
+select *<br>
+delete id=5<br>
+delete between 2026-04-01 and 2026-04-03
+</p>
+
+<hr>
+
 <h3>Search</h3>
 From <input type="date" id="start">
 To <input type="date" id="end">
@@ -39,24 +41,10 @@ To <input type="date" id="end">
 
 <hr>
 
-
-<h3>Query Box</h3>
-
-<input type="text" id="query" placeholder="Enter query here" style="width:70%">
-<button onclick="runQuery()">Run Query</button>
-
-<p>
-Examples:<br>
-select *<br>
-delete id=5<br>
-delete between 2026-04-01 and 2026-04-03
-</p>
-<!-- GRAPH -->
 <canvas id="chart" height="100"></canvas>
 
 <hr>
 
-<!-- TABLE -->
 <table border="1" width="100%" style="border-collapse:collapse; text-align:center;">
 <thead style="background:#007BFF; color:white;">
 <tr>
@@ -72,14 +60,12 @@ delete between 2026-04-01 and 2026-04-03
 
 const base = "https://mahajansensor6.onrender.com";
 
-// ---------- LOAD ALL ----------
 function loadAll(){
  fetch(base + "/api/all")
  .then(r=>r.json())
  .then(show);
 }
 
-// ---------- SHOW TABLE ----------
 function show(d){
  let html="";
  d.forEach(r=>{
@@ -94,7 +80,6 @@ function show(d){
  document.getElementById("data").innerHTML = html;
 }
 
-// ---------- STATUS ----------
 function status(){
  fetch(base + "/api/status")
  .then(r=>r.json())
@@ -106,12 +91,10 @@ function status(){
  });
 }
 
-// ---------- CONTROL ----------
 function control(a){
  fetch(base + "/api/control?action=" + a);
 }
 
-// ---------- SEARCH ----------
 function search(){
  let s = document.getElementById("start").value;
  let e = document.getElementById("end").value;
@@ -124,7 +107,6 @@ function search(){
  });
 }
 
-// ---------- DOWNLOAD ----------
 function download(){
  let s = document.getElementById("start").value;
  let e = document.getElementById("end").value;
@@ -132,7 +114,25 @@ function download(){
  window.location = `${base}/api/download?start=${s}&end=${e}`;
 }
 
-// ---------- GRAPH ----------
+function runQuery(){
+ let q = document.getElementById("query").value;
+
+ fetch(base + "/api/query", {
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body: JSON.stringify({query:q})
+ })
+ .then(r=>{
+   if(!r.ok) throw new Error("Invalid Query");
+   return r.json();
+ })
+ .then(d=>{
+   show(d);
+   drawGraph(d);
+ })
+ .catch(()=>alert("Invalid Query"));
+}
+
 let chart;
 
 function drawGraph(d){
@@ -157,11 +157,9 @@ function drawGraph(d){
  });
 }
 
-// ---------- AUTO REFRESH ----------
 setInterval(loadAll, 5000);
 setInterval(status, 5000);
 
-// first load
 loadAll();
 status();
 
