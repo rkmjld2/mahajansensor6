@@ -1,95 +1,125 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sensor Dashboard</title>
+<title>Sensor Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body>
 
-<h2>Sensor Dashboard</h2>
+<h2>Dashboard</h2>
 
-<button onclick="start()">Start</button>
-<button onclick="stop()">Stop</button>
+<button onclick="control('start')">Start</button>
+<button onclick="control('stop')">Stop</button>
 
-<h3>Status:</h3>
 <div id="status"></div>
 
+<hr>
+
+<h3>SQL Query</h3>
+<input id="query" style="width:400px">
+<button onclick="runQuery()">Run</button>
+
+<hr>
+
 <h3>Search</h3>
-From: <input type="date" id="start">
-To: <input type="date" id="end">
+From <input type="date" id="start">
+To <input type="date" id="end">
+
 <button onclick="search()">Search</button>
+<button onclick="download()">Download</button>
+
+<canvas id="chart" width="400" height="150"></canvas>
 
 <table border="1">
 <thead>
-<tr>
-<th>ID</th><th>S1</th><th>S2</th><th>S3</th><th>Date</th>
-</tr>
+<tr><th>ID</th><th>S1</th><th>S2</th><th>S3</th><th>Date</th></tr>
 </thead>
 <tbody id="data"></tbody>
 </table>
 
 <script>
+
 const base = "https://mahajansensor6.onrender.com";
 
-function loadData(){
-    fetch(base + "/api/all")
-    .then(r=>r.json())
-    .then(d=>{
-        let html="";
-        d.forEach(row=>{
-            html += `<tr>
-            <td>${row.id}</td>
-            <td>${row.sensor1}</td>
-            <td>${row.sensor2}</td>
-            <td>${row.sensor3}</td>
-            <td>${row.date}</td>
-            </tr>`;
-        });
-        document.getElementById("data").innerHTML = html;
-    });
-}
-
-function search(){
-    let s = document.getElementById("start").value;
-    let e = document.getElementById("end").value;
-
-    fetch(`${base}/api/search?start=${s}&end=${e}`)
-    .then(r=>r.json())
-    .then(d=>{
-        let html="";
-        d.forEach(row=>{
-            html += `<tr>
-            <td>${row.id}</td>
-            <td>${row.sensor1}</td>
-            <td>${row.sensor2}</td>
-            <td>${row.sensor3}</td>
-            <td>${row.date}</td>
-            </tr>`;
-        });
-        document.getElementById("data").innerHTML = html;
-    });
-}
-
-function start(){
-    fetch(base + "/api/control?action=start");
-}
-
-function stop(){
-    fetch(base + "/api/control?action=stop");
+function control(a){
+ fetch(base + "/api/control?action="+a);
 }
 
 function status(){
-    fetch(base + "/api/status")
-    .then(r=>r.json())
-    .then(d=>{
-        document.getElementById("status").innerHTML =
-        "Receiving: " + d.receiving +
-        "<br>ESP: " + d.esp_status +
-        "<br>Last Seen: " + d.last_seen;
-    });
+ fetch(base+"/api/status")
+ .then(r=>r.json())
+ .then(d=>{
+   document.getElementById("status").innerHTML =
+   "Receiving: "+d.receiving+
+   "<br>ESP Connected: "+d.esp_connected+
+   "<br>Last Seen: "+d.last_seen;
+ });
 }
 
-setInterval(loadData, 5000);
-setInterval(status, 5000);
+function runQuery(){
+ fetch(base+"/api/query",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({query:document.getElementById("query").value})
+ })
+ .then(r=>r.json()).then(show);
+}
+
+function search(){
+ let s=document.getElementById("start").value;
+ let e=document.getElementById("end").value;
+
+ fetch(`${base}/api/search?start=${s}&end=${e}`)
+ .then(r=>r.json())
+ .then(d=>{
+   show(d);
+   drawGraph(d);
+ });
+}
+
+function download(){
+ let s=document.getElementById("start").value;
+ let e=document.getElementById("end").value;
+ window.location = `${base}/api/download?start=${s}&end=${e}`;
+}
+
+function show(d){
+ let html="";
+ d.forEach(r=>{
+  html+=`<tr>
+  <td>${r.id}</td>
+  <td>${r.sensor1}</td>
+  <td>${r.sensor2}</td>
+  <td>${r.sensor3}</td>
+  <td>${r.date}</td>
+  </tr>`;
+ });
+ document.getElementById("data").innerHTML=html;
+}
+
+function drawGraph(d){
+
+ let labels = d.map(x=>x.date);
+ let s1 = d.map(x=>x.sensor1);
+ let s2 = d.map(x=>x.sensor2);
+ let s3 = d.map(x=>x.sensor3);
+
+ new Chart(document.getElementById("chart"), {
+   type: 'line',
+   data: {
+     labels: labels,
+     datasets: [
+       {label:"S1",data:s1},
+       {label:"S2",data:s2},
+       {label:"S3",data:s3}
+     ]
+   }
+ });
+}
+
+setInterval(status,5000);
+
 </script>
 
 </body>
