@@ -1,185 +1,140 @@
 from flask import Flask, request, jsonify, render_template
 import os
-import csv
 from datetime import datetime
+import csv
+import json
 
 app = Flask(__name__)
 
-FILE = "data.csv"
-API_KEY = "12b5112c62284ea0b3da0039f298ec7a85ac9a1791044052b6df970640afb1c5"
+DATA_FILE = "data/sensor_data.csv"
+STATUS_FILE = "data/status.json"
 
-# ✅ Ensure file exists with header
-def create_file():
-    if not os.path.exists(FILE):
-        with open(FILE, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["id","sensor1","sensor2","sensor3","Date"])
+# Ensure folder exists
+os.makedirs("data", exist_ok=True)
 
-create_file()
-
-
-# -------- INIT FILE --------
-if not os.path.exists(FILE):
-    with open(FILE, "w", newline="") as f:
+# Initialize files
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["id","sensor1","sensor2","sensor3","Date"])
+        writer.writerow(["id", "sensor1", "sensor2", "sensor3", "date"])
+
+if not os.path.exists(STATUS_FILE):
+    with open(STATUS_FILE, "w") as f:
+        json.dump({"receive": True, "last_seen": ""}, f)
 
 
-# -------- SAVE DATA (FROM ESP) --------
-@app.route("/api/data")
-def save_data():
+# ---------- HOME ----------
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-    # 🔐 SECURITY CHECK
-    if request.args.get("key") != API_KEY:
-        return "Unauthorized"
 
+# ---------- RECEIVE SENSOR DATA ----------
+@app.route("/api/data", methods=["GET"])
+def receive_data():
     s1 = request.args.get("s1")
     s2 = request.args.get("s2")
     s3 = request.args.get("s3")
 
-    # DATE FORMAT (same as your requirement)
-    now = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    with open(STATUS_FILE, "r") as f:
+        status = json.load(f)
 
-    # GET LAST ID
-    with open(FILE, "r") as f:
+    if not status["receive"]:
+        return "Receiving Stopped", 403
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Read last ID
+    last_id = 0
+    with open(DATA_FILE, "r") as f:
         rows = list(csv.reader(f))
-        last_id = int(rows[-1][0]) if len(rows) > 1 else 0
+        if len(rows) > 1:
+            last_id = int(rows[-1][0])
 
     new_id = last_id + 1
 
-    # SAVE
-    with open(FILE, "a", newline="") as f:
+    with open(DATA_FILE, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([new_id, s1, s2, s3, now])
 
-    return "Saved"
+    # Update last seen
+    status["last_seen"] = now
+    with open(STATUS_FILE, "w") as f:
+        json.dump(status, f)
+
+    return "OK"
 
 
-# -------- GET DATA --------
-@app.route("/data")
-def get_data():
-
-    with open(FILE, "r") as f:
-        reader = csv.DictReader(f)
-        data = list(reader)[-50:]
-
+# ---------- GET ALL DATA ----------
+@app.route("/api/all")
+def get_all():
+    with open(DATA_FILE, "r") as f:
+        data = list(csv.DictReader(f))
     return jsonify(data)
 
 
-# -------- SEARCH BY DATE --------
-@app.route("/search", methods=["POST"])
+# ---------- SEARCH BY DATE ----------
+@app.route("/api/search")
 def search():
-
-    start = request.form.get("start")
-    end = request.form.get("end")
-
-    start_dt = datetime.strptime(start, "%Y-%m-%dT%H:%M")
-    end_dt = datetime.strptime(end, "%Y-%m-%dT%H:%M")
+    start = request.args.get("start")
+    end = request.args.get("end")
 
     result = []
 
-    with open(FILE, "r") as f:
+    with open(DATA_FILE, "r") as f:
         reader = csv.DictReader(f)
-
         for row in reader:
-            row_time = datetime.strptime(row["Date"], "%d/%m/%Y %H:%M:%S")
+            row_date = datetime.strptime(row["date"], "%Y-%m-%d %H:%M:%S")
 
-            if start_dt <= row_time <= end_dt:
-                result.append(row)
+            if start and end:
+                start_d = datetime.strptime(start, "%Y-%m-%d")
+                end_d = datetime.strptime(end, "%Y-%m-%d")
+
+                if start_d <= row_date <= end_d:
+                    result.append(row)
 
     return jsonify(result)
 
 
-# -------- DOWNLOAD --------
-@app.route("/download", methods=["POST"])
-def download():
+# ---------- START / STOP ----------
+@app.route("/api/control")
+def control():
+    action = request.args.get("action")
 
-    start = request.form.get("start")
-    end = request.form.get("end")
+    with open(STATUS_FILE, "r") as f:
+        status = json.load(f)
 
-    start_dt = datetime.strptime(start, "%Y-%m-%dT%H:%M")
-    end_dt = datetime.strptime(end, "%Y-%m-%dT%H:%M")
+    if action == "start":
+        status["receive"] = True
+    elif action == "stop":
+        status["receive"] = False
 
-    from io import StringIO
-    si = StringIO()
-    writer = csv.writer(si)
+    with open(STATUS_FILE, "w") as f:
+        json.dump(status, f)
 
-    writer.writerow(["id","sensor1","sensor2","sensor3","Date"])
-
-    with open(FILE, "r") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            row_time = datetime.strptime(row["Date"], "%d/%m/%Y %H:%M:%S")
-
-            if start_dt <= row_time <= end_dt:
-                writer.writerow([
-                    row["id"],
-                    row["sensor1"],
-                    row["sensor2"],
-                    row["sensor3"],
-                    row["Date"]
-                ])
-
-    return si.getvalue(), 200, {
-        'Content-Type': 'text/csv',
-        'Content-Disposition': 'attachment; filename=data.csv'
-    }
+    return jsonify(status)
 
 
-# -------- HOME --------
-@app.route("/")
-def home():
-    return render_template("index.html")
+# ---------- STATUS ----------
+@app.route("/api/status")
+def get_status():
+    with open(STATUS_FILE, "r") as f:
+        status = json.load(f)
 
-#------delete all
-@app.route("/delete_all", methods=["GET"])
-def delete_all():
-    key = request.args.get("key")
+    last_seen = status.get("last_seen", "")
 
-    if key != API_KEY:
-        return "Unauthorized", 403
+    connected = False
+    if last_seen:
+        diff = (datetime.now() - datetime.strptime(last_seen, "%Y-%m-%d %H:%M:%S")).seconds
+        if diff < 60:
+            connected = True
 
-    # Keep header, delete all records
-    with open(FILE, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id","sensor1","sensor2","sensor3","Date"])
-
-    return "All data deleted successfully"
-
-#...........delete id
-
-@app.route("/delete_id", methods=["GET"])
-def delete_by_id():
-    key = request.args.get("key")
-    delete_id = request.args.get("id")
-
-    if key != API_KEY:
-        return "Unauthorized", 403
-
-    if not delete_id:
-        return "ID required"
-
-    rows = []
-
-    with open(FILE, "r") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        for row in reader:
-            if row[0] != delete_id:
-                rows.append(row)
-
-    with open(FILE, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(rows)
-
-    return f"Record with ID {delete_id} deleted"
-	
+    return jsonify({
+        "receiving": status["receive"],
+        "esp_status": "Connected" if connected else "Disconnected",
+        "last_seen": last_seen
+    })
 
 
-
-
-# -------- RUN --------
 if __name__ == "__main__":
     app.run(debug=True)
