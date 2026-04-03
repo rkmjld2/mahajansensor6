@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template, send_file
-import os, csv, json
+import os, csv, json, io
 from datetime import datetime
-import io
 
 app = Flask(__name__)
 
@@ -10,7 +9,7 @@ STATUS_FILE = "data/status.json"
 
 os.makedirs("data", exist_ok=True)
 
-# Init files
+# ---------- INIT ----------
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w", newline="") as f:
         csv.writer(f).writerow(["id","sensor1","sensor2","sensor3","date"])
@@ -20,7 +19,13 @@ if not os.path.exists(STATUS_FILE):
         json.dump({"receive": True, "last_seen": ""}, f)
 
 
-# ---------- RECEIVE ----------
+# ---------- HOME ----------
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+# ---------- RECEIVE DATA ----------
 @app.route("/api/data")
 def receive():
     with open(STATUS_FILE) as f:
@@ -40,25 +45,31 @@ def receive():
     new_id = last_id + 1
 
     with open(DATA_FILE, "a", newline="") as f:
-        csv.writer(f).writerow([new_id,s1,s2,s3,now])
+        csv.writer(f).writerow([new_id, s1, s2, s3, now])
 
     status["last_seen"] = now
-    with open(STATUS_FILE,"w") as f:
-        json.dump(status,f)
+    with open(STATUS_FILE, "w") as f:
+        json.dump(status, f)
 
     return "OK"
 
 
+# ---------- GET ALL DATA ----------
+@app.route("/api/all")
+def get_all():
+    return jsonify(list(csv.DictReader(open(DATA_FILE))))
+
+
 # ---------- STATUS ----------
 @app.route("/api/status")
-def status():
+def get_status():
     with open(STATUS_FILE) as f:
         s = json.load(f)
 
     connected = False
     if s["last_seen"]:
         diff = (datetime.now() - datetime.strptime(s["last_seen"], "%Y-%m-%d %H:%M:%S")).seconds
-        connected = diff < 30   # FIXED logic
+        connected = diff < 30
 
     return jsonify({
         "receiving": s["receive"],
@@ -80,52 +91,10 @@ def control():
     elif action == "stop":
         s["receive"] = False
 
-    with open(STATUS_FILE,"w") as f:
-        json.dump(s,f)
+    with open(STATUS_FILE, "w") as f:
+        json.dump(s, f)
 
     return jsonify(s)
-
-
-# ---------- GET ALL ----------
-@app.route("/api/all")
-def all_data():
-    return jsonify(list(csv.DictReader(open(DATA_FILE))))
-
-
-# ---------- SQL-LIKE QUERY ----------
-@app.route("/api/query", methods=["POST"])
-def query():
-    q = request.json.get("query","").lower()
-    rows = list(csv.DictReader(open(DATA_FILE)))
-
-    # SELECT *
-    if "select" in q:
-        return jsonify(rows)
-
-    # DELETE id
-    if "delete" in q and "id" in q:
-        id_val = q.split("id=")[1]
-        rows = [r for r in rows if r["id"] != id_val]
-
-    # DELETE date range
-    if "delete" in q and "between" in q:
-        parts = q.split("between")[1].split("and")
-        start = parts[0].strip()
-        end = parts[1].strip()
-
-        def keep(r):
-            d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
-            return not (start <= d.strftime("%Y-%m-%d") <= end)
-
-        rows = [r for r in rows if keep(r)]
-
-    # rewrite file
-    with open(DATA_FILE,"w",newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","date"])
-        writer.writeheader()
-        writer.writerows(rows)
-
-    return jsonify(rows)
 
 
 # ---------- SEARCH ----------
@@ -166,9 +135,4 @@ def download():
     return send_file(io.BytesIO(output.getvalue().encode()),
                      mimetype="text/csv",
                      as_attachment=True,
-                     download_name="data.csv")
-
-
-@app.route("/")
-def home():
-    return render_template("index.html")
+                     download_name="sensor_data.csv")
