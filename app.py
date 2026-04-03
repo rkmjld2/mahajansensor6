@@ -4,20 +4,20 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-#DATA_FILE = "data/sensor_data.csv"
-
+# ---------- PATH SETUP (VERY IMPORTANT FIX) ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "data", "sensor_data.csv")
-STATUS_FILE = os.path.join(BASE_DIR, "data", "status.json")
+DATA_DIR = os.path.join(BASE_DIR, "data")
 
-STATUS_FILE = "data/status.json"
-os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
+DATA_FILE = os.path.join(DATA_DIR, "sensor_data.csv")
+STATUS_FILE = os.path.join(DATA_DIR, "status.json")
 
+os.makedirs(DATA_DIR, exist_ok=True)
 
-# ---------- INIT ----------
+# ---------- INIT FILES ----------
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w", newline="") as f:
-        csv.writer(f).writerow(["id","sensor1","sensor2","sensor3","date"])
+        writer = csv.writer(f)
+        writer.writerow(["id", "sensor1", "sensor2", "sensor3", "date"])
 
 if not os.path.exists(STATUS_FILE):
     with open(STATUS_FILE, "w") as f:
@@ -30,9 +30,10 @@ def home():
     return render_template("index.html")
 
 
-# ---------- RECEIVE DATA ----------
+# ---------- RECEIVE DATA FROM ESP ----------
 @app.route("/api/data")
 def receive():
+
     with open(STATUS_FILE) as f:
         status = json.load(f)
 
@@ -45,13 +46,19 @@ def receive():
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    rows = list(csv.reader(open(DATA_FILE)))
-    last_id = int(rows[-1][0]) if len(rows)>1 else 0
+    # read last ID safely
+    with open(DATA_FILE, "r") as f:
+        rows = list(csv.reader(f))
+
+    last_id = int(rows[-1][0]) if len(rows) > 1 else 0
     new_id = last_id + 1
 
+    # write data
     with open(DATA_FILE, "a", newline="") as f:
-        csv.writer(f).writerow([new_id, s1, s2, s3, now])
+        writer = csv.writer(f)
+        writer.writerow([new_id, s1, s2, s3, now])
 
+    # update status
     status["last_seen"] = now
     with open(STATUS_FILE, "w") as f:
         json.dump(status, f)
@@ -59,15 +66,18 @@ def receive():
     return "OK"
 
 
-# ---------- GET ALL ----------
+# ---------- GET ALL DATA ----------
 @app.route("/api/all")
 def get_all():
-    return jsonify(list(csv.DictReader(open(DATA_FILE))))
+    with open(DATA_FILE, "r") as f:
+        data = list(csv.DictReader(f))
+    return jsonify(data)
 
 
 # ---------- STATUS ----------
 @app.route("/api/status")
 def get_status():
+
     with open(STATUS_FILE) as f:
         s = json.load(f)
 
@@ -86,6 +96,7 @@ def get_status():
 # ---------- CONTROL ----------
 @app.route("/api/control")
 def control():
+
     action = request.args.get("action")
 
     with open(STATUS_FILE) as f:
@@ -105,17 +116,19 @@ def control():
 # ---------- SEARCH ----------
 @app.route("/api/search")
 def search():
+
     start = request.args.get("start")
     end = request.args.get("end")
 
     result = []
 
-    for r in csv.DictReader(open(DATA_FILE)):
-        d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
+    with open(DATA_FILE, "r") as f:
+        for r in csv.DictReader(f):
+            d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
 
-        if start and end:
-            if start <= d.strftime("%Y-%m-%d") <= end:
-                result.append(r)
+            if start and end:
+                if start <= d.strftime("%Y-%m-%d") <= end:
+                    result.append(r)
 
     return jsonify(result)
 
@@ -123,6 +136,7 @@ def search():
 # ---------- DOWNLOAD ----------
 @app.route("/api/download")
 def download():
+
     start = request.args.get("start")
     end = request.args.get("end")
 
@@ -130,10 +144,12 @@ def download():
     writer = csv.writer(output)
     writer.writerow(["id","sensor1","sensor2","sensor3","date"])
 
-    for r in csv.DictReader(open(DATA_FILE)):
-        d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
-        if start <= d.strftime("%Y-%m-%d") <= end:
-            writer.writerow([r["id"],r["sensor1"],r["sensor2"],r["sensor3"],r["date"]])
+    with open(DATA_FILE, "r") as f:
+        for r in csv.DictReader(f):
+            d = datetime.strptime(r["date"], "%Y-%m-%d %H:%M:%S")
+
+            if start <= d.strftime("%Y-%m-%d") <= end:
+                writer.writerow([r["id"], r["sensor1"], r["sensor2"], r["sensor3"], r["date"]])
 
     output.seek(0)
 
@@ -146,15 +162,17 @@ def download():
 # ---------- QUERY ----------
 @app.route("/api/query", methods=["POST"])
 def query():
-    q = request.json.get("query","").lower().strip()
 
-    rows = list(csv.DictReader(open(DATA_FILE)))
+    q = request.json.get("query", "").lower().strip()
 
-    # ---------- SELECT ALL ----------
+    with open(DATA_FILE, "r") as f:
+        rows = list(csv.DictReader(f))
+
+    # SELECT ALL
     if q == "select *":
         return jsonify(rows)
 
-    # ---------- SELECT BY DATE ----------
+    # SELECT DATE RANGE
     elif "select between" in q:
         try:
             parts = q.replace("select between","").split("and")
@@ -172,12 +190,12 @@ def query():
         except:
             return "Invalid Query", 400
 
-    # ---------- DELETE BY ID ----------
+    # DELETE ID
     elif q.startswith("delete id="):
         val = q.split("=")[1]
         rows = [r for r in rows if r["id"] != val]
 
-    # ---------- DELETE BY DATE ----------
+    # DELETE DATE RANGE
     elif "delete between" in q:
         try:
             parts = q.replace("delete between","").split("and")
@@ -196,8 +214,8 @@ def query():
     else:
         return "Unsupported Query", 400
 
-    # ---------- WRITE BACK ----------
-    with open(DATA_FILE,"w",newline="") as f:
+    # rewrite file after delete
+    with open(DATA_FILE, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","date"])
         writer.writeheader()
         writer.writerows(rows)
@@ -205,5 +223,6 @@ def query():
     return jsonify(rows)
 
 
+# ---------- RUN ----------
 if __name__ == "__main__":
     app.run(debug=True)
