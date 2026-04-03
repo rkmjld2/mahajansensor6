@@ -3,6 +3,8 @@
 <head>
     <title>Sensor Dashboard</title>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         body {
             font-family: Arial;
@@ -12,23 +14,19 @@
 
         .container {
             width: 90%;
-            max-width: 900px;
+            max-width: 1000px;
             margin: auto;
-            margin-top: 40px;
+            margin-top: 30px;
             background: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0px 0px 10px #ccc;
         }
 
-        h1 {
-            margin-bottom: 10px;
-        }
-
         #status {
             font-size: 20px;
             font-weight: bold;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         table {
@@ -46,12 +44,8 @@
             color: white;
         }
 
-        tr:nth-child(even) {
-            background: #f2f2f2;
-        }
-
         button {
-            padding: 10px 15px;
+            padding: 8px 12px;
             margin: 5px;
             border: none;
             color: white;
@@ -68,40 +62,53 @@
 
 <div class="container">
 
-    <h1>📡 Sensor Monitoring System</h1>
+<h1>📡 Sensor Monitoring System</h1>
 
-    <!-- STATUS -->
-    <div id="status">🔴 DISCONNECTED</div>
+<div id="status">🔴 DISCONNECTED</div>
 
-    <!-- BUTTONS -->
-    <button class="start" onclick="start()">START</button>
-    <button class="stop" onclick="stop()">STOP</button>
+<button class="start" onclick="start()">START</button>
+<button class="stop" onclick="stop()">STOP</button>
 
-    <h3>Live Data</h3>
+<h3>Search Data</h3>
 
-    <!-- TABLE -->
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Sensor1</th>
-                <th>Sensor2</th>
-                <th>Sensor3</th>
-                <th>Date</th>
-            </tr>
-        </thead>
+Start:
+<input type="datetime-local" id="start">
 
-        <tbody id="tableBody">
-        </tbody>
-    </table>
+End:
+<input type="datetime-local" id="end">
+
+<button onclick="searchData()">Search</button>
+<button onclick="loadData()">Reset</button>
+
+<br><br>
+
+<canvas id="chart" height="100"></canvas>
+
+<h3>Live Data</h3>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Sensor1</th>
+<th>Sensor2</th>
+<th>Sensor3</th>
+<th>Date</th>
+</tr>
+</thead>
+
+<tbody id="tableBody"></tbody>
+
+</table>
 
 </div>
 
 <script>
 
-// =========================
-// STATUS CHECK
-// =========================
+let chart;
+let receiving = true;
+
+// ================= STATUS =================
 function checkStatus() {
 
     fetch('/api/status')
@@ -117,16 +124,13 @@ function checkStatus() {
             el.innerHTML = "🔴 DISCONNECTED";
             el.style.color = "red";
         }
-
     })
-    .catch(err => {
+    .catch(() => {
         document.getElementById("status").innerHTML = "⚠️ SERVER ERROR";
     });
 }
 
-// =========================
-// LOAD DATA
-// =========================
+// ================= LOAD DATA =================
 function loadData() {
 
     fetch('/api/all')
@@ -151,25 +155,69 @@ function loadData() {
     });
 }
 
-// =========================
-// START / STOP (UI ONLY)
-// =========================
-let receiving = true;
+// ================= SEARCH =================
+function searchData() {
 
-function start() {
-    receiving = true;
-    document.getElementById("status").innerHTML = "🟢 STARTED";
+    let s = document.getElementById("start").value;
+    let e = document.getElementById("end").value;
+
+    fetch(`/api/search?start=${s}&end=${e}`)
+    .then(res => res.json())
+    .then(data => {
+
+        let table = document.getElementById("tableBody");
+        table.innerHTML = "";
+
+        let labels = [];
+        let values = [];
+
+        data.forEach(row => {
+
+            labels.push(row.date);
+            values.push(row.sensor1);
+
+            let tr = `<tr>
+                <td>${row.id}</td>
+                <td>${row.sensor1}</td>
+                <td>${row.sensor2}</td>
+                <td>${row.sensor3}</td>
+                <td>${row.date}</td>
+            </tr>`;
+
+            table.innerHTML += tr;
+        });
+
+        drawChart(labels, values);
+    });
 }
 
-function stop() {
-    receiving = false;
-    document.getElementById("status").innerHTML = "🔴 STOPPED";
+// ================= GRAPH =================
+function drawChart(labels, data) {
+
+    let ctx = document.getElementById("chart").getContext("2d");
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Sensor1",
+                data: data,
+                borderWidth: 2
+            }]
+        }
+    });
 }
 
-// =========================
-// AUTO REFRESH
-// =========================
+// ================= CONTROL =================
+function start() { receiving = true; }
+function stop() { receiving = false; }
+
+// ================= AUTO REFRESH =================
 setInterval(() => {
+
     checkStatus();
 
     if (receiving) {
