@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_file
 import csv, os, time
 
 app = Flask(__name__)
@@ -27,7 +27,6 @@ def receive():
     if key != API_KEY:
         return "Invalid Key", 403
 
-    # update connection time
     last_seen = time.time()
 
     if not collect_data:
@@ -39,11 +38,17 @@ def receive():
         s3 = request.args.get("s3")
         now = request.args.get("time")
 
-        # -------- GENERATE CONTINUOUS ID --------
+        # -------- READ OLD DATA --------
         rows = []
         with open(DATA_FILE, "r") as f:
             rows = list(csv.DictReader(f))
 
+        # -------- DUPLICATE CHECK --------
+        for r in rows:
+            if r["time"] == now and r["sensor1"] == s1 and r["sensor2"] == s2:
+                return "Duplicate"
+
+        # -------- ID GENERATE --------
         if len(rows) == 0:
             new_id = 1
         else:
@@ -54,7 +59,7 @@ def receive():
             writer = csv.writer(f)
             writer.writerow([new_id, s1, s2, s3, now])
 
-        print("Saved:", new_id, s1, s2, s3, now)
+        print("Saved:", new_id)
 
         return "OK"
 
@@ -63,7 +68,7 @@ def receive():
         return "Error", 500
 
 
-# -------- GET ALL DATA --------
+# -------- ALL DATA --------
 @app.route("/api/all")
 def all_data():
     try:
@@ -71,6 +76,31 @@ def all_data():
             return jsonify(list(csv.DictReader(f)))
     except:
         return jsonify([])
+
+
+# -------- DOWNLOAD --------
+@app.route("/download")
+def download():
+    return send_file(DATA_FILE, as_attachment=True)
+
+
+# -------- DELETE --------
+@app.route("/delete")
+def delete():
+    start = int(request.args.get("start"))
+    end = int(request.args.get("end"))
+
+    with open(DATA_FILE, "r") as f:
+        rows = list(csv.DictReader(f))
+
+    rows = [r for r in rows if not (start <= int(r["id"]) <= end)]
+
+    with open(DATA_FILE, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","time"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+    return "Deleted"
 
 
 # -------- STATUS --------
@@ -82,15 +112,13 @@ def status():
         return jsonify({"status": "Disconnected"})
 
 
-# -------- START --------
+# -------- CONTROL --------
 @app.route("/start")
 def start():
     global collect_data
     collect_data = True
     return "Started"
 
-
-# -------- STOP --------
 @app.route("/stop")
 def stop():
     global collect_data
