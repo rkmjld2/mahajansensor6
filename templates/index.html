@@ -1,230 +1,94 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sensor Dashboard</title>
+<title>Sensor Monitoring</title>
 
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body { font-family: Arial; text-align:center; }
+button { padding:10px; margin:5px; }
+table { border-collapse: collapse; margin:auto; }
+th,td { border:1px solid black; padding:8px; }
+</style>
 
-    <style>
-        body {
-            font-family: Arial;
-            background: #f4f6f8;
-            text-align: center;
-        }
-
-        .container {
-            width: 90%;
-            max-width: 1000px;
-            margin: auto;
-            margin-top: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px #ccc;
-        }
-
-        #status {
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-        }
-
-        th {
-            background: #007bff;
-            color: white;
-        }
-
-        button {
-            padding: 8px 12px;
-            margin: 5px;
-            border: none;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-
-        .start { background: green; }
-        .stop { background: red; }
-    </style>
 </head>
 
 <body>
 
-<div class="container">
+<h2>Sensor Monitoring System</h2>
 
-<h1>📡 Sensor Monitoring System</h1>
+<h3 id="status">Checking...</h3>
 
-<div id="status">🔴 DISCONNECTED</div>
-
-<button class="start" onclick="start()">START</button>
-<button class="stop" onclick="stop()">STOP</button>
-
-<h3>Search Data</h3>
-
-Start:
-<input type="datetime-local" id="start">
-
-End:
-<input type="datetime-local" id="end">
-
-<button onclick="searchData()">Search</button>
-<button onclick="loadData()">Reset</button>
+<button onclick="start()">START</button>
+<button onclick="stop()">STOP</button>
 
 <br><br>
 
-<canvas id="chart" height="100"></canvas>
+<input type="text" id="searchBox" placeholder="Search">
+<button onclick="search()">Search</button>
 
-<h3>Live Data</h3>
+<br><br>
 
 <table>
 <thead>
 <tr>
-<th>ID</th>
-<th>Sensor1</th>
-<th>Sensor2</th>
-<th>Sensor3</th>
-<th>Date</th>
+<th>ID</th><th>S1</th><th>S2</th><th>S3</th><th>Time</th>
 </tr>
 </thead>
-
-<tbody id="tableBody"></tbody>
-
+<tbody id="data"></tbody>
 </table>
-
-</div>
 
 <script>
 
-let chart;
-let receiving = true;
+async function load(){
+    let res = await fetch('/api/all');
+    let d = await res.json();
 
-// ================= STATUS =================
-function checkStatus() {
-
-    fetch('/api/status')
-    .then(res => res.json())
-    .then(data => {
-
-        let el = document.getElementById("status");
-
-        if (data.status === "CONNECTED") {
-            el.innerHTML = "🟢 CONNECTED";
-            el.style.color = "green";
-        } else {
-            el.innerHTML = "🔴 DISCONNECTED";
-            el.style.color = "red";
-        }
-    })
-    .catch(() => {
-        document.getElementById("status").innerHTML = "⚠️ SERVER ERROR";
+    let html = "";
+    d.reverse().forEach(r=>{
+        html += `<tr>
+        <td>${r.id}</td>
+        <td>${r.sensor1}</td>
+        <td>${r.sensor2}</td>
+        <td>${r.sensor3}</td>
+        <td>${r.time}</td>
+        </tr>`;
     });
+
+    document.getElementById("data").innerHTML = html;
 }
 
-// ================= LOAD DATA =================
-function loadData() {
+async function status(){
+    let res = await fetch('/status');
+    let d = await res.json();
 
-    fetch('/api/all')
-    .then(res => res.json())
-    .then(data => {
+    let el = document.getElementById("status");
 
-        let table = document.getElementById("tableBody");
-        table.innerHTML = "";
-
-        data.reverse().forEach(row => {
-
-            let tr = `<tr>
-                <td>${row.id}</td>
-                <td>${row.sensor1}</td>
-                <td>${row.sensor2}</td>
-                <td>${row.sensor3}</td>
-                <td>${row.date}</td>
-            </tr>`;
-
-            table.innerHTML += tr;
-        });
-    });
-}
-
-// ================= SEARCH =================
-function searchData() {
-
-    let s = document.getElementById("start").value;
-    let e = document.getElementById("end").value;
-
-    fetch(`/api/search?start=${s}&end=${e}`)
-    .then(res => res.json())
-    .then(data => {
-
-        let table = document.getElementById("tableBody");
-        table.innerHTML = "";
-
-        let labels = [];
-        let values = [];
-
-        data.forEach(row => {
-
-            labels.push(row.date);
-            values.push(row.sensor1);
-
-            let tr = `<tr>
-                <td>${row.id}</td>
-                <td>${row.sensor1}</td>
-                <td>${row.sensor2}</td>
-                <td>${row.sensor3}</td>
-                <td>${row.date}</td>
-            </tr>`;
-
-            table.innerHTML += tr;
-        });
-
-        drawChart(labels, values);
-    });
-}
-
-// ================= GRAPH =================
-function drawChart(labels, data) {
-
-    let ctx = document.getElementById("chart").getContext("2d");
-
-    if (chart) chart.destroy();
-
-    chart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: labels,
-            datasets: [{
-                label: "Sensor1",
-                data: data,
-                borderWidth: 2
-            }]
-        }
-    });
-}
-
-// ================= CONTROL =================
-function start() { receiving = true; }
-function stop() { receiving = false; }
-
-// ================= AUTO REFRESH =================
-setInterval(() => {
-
-    checkStatus();
-
-    if (receiving) {
-        loadData();
+    if(d.status=="Connected"){
+        el.innerHTML="🟢 Connected";
+        el.style.color="green";
+    } else {
+        el.innerHTML="🔴 Disconnected";
+        el.style.color="red";
     }
+}
 
-}, 3000);
+function start(){ fetch('/start'); }
+function stop(){ fetch('/stop'); }
+
+function search(){
+    let val = document.getElementById("searchBox").value.toLowerCase();
+    let rows = document.querySelectorAll("tbody tr");
+
+    rows.forEach(r=>{
+        r.style.display = r.innerText.toLowerCase().includes(val) ? "" : "none";
+    });
+}
+
+setInterval(load,5000);
+setInterval(status,3000);
+
+load();
+status();
 
 </script>
 
