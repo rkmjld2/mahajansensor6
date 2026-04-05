@@ -130,6 +130,17 @@ def stop():
 @app.route("/")
 def home():
     return render_template("index.html")
+
+
+#.......sddata
+
+@app.route("/api/sddata")
+def sd_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            return jsonify(list(csv.DictReader(f)))
+    except:
+        return jsonify([])
 # -------- QUERY COMMAND --------
 @app.route("/query")
 def query():
