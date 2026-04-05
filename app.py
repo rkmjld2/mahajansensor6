@@ -130,7 +130,38 @@ def stop():
 @app.route("/")
 def home():
     return render_template("index.html")
+# -------- QUERY COMMAND --------
+@app.route("/query")
+def query():
+    cmd = request.args.get("cmd")
 
+    try:
+        if cmd.startswith("delete"):
+            _, start, end = cmd.split()
+
+            start = int(start)
+            end = int(end)
+
+            with open(DATA_FILE, "r") as f:
+                rows = list(csv.DictReader(f))
+
+            rows = [r for r in rows if not (start <= int(r["id"]) <= end)]
+
+            with open(DATA_FILE, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=["id","sensor1","sensor2","sensor3","time"])
+                writer.writeheader()
+                writer.writerows(rows)
+
+            return "Deleted"
+
+        elif cmd == "all":
+            with open(DATA_FILE, "r") as f:
+                return jsonify(list(csv.DictReader(f)))
+
+        return "Unknown Command"
+
+    except Exception as e:
+        return str(e)
 
 # -------- RUN --------
 if __name__ == "__main__":
