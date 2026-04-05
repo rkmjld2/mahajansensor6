@@ -123,12 +123,20 @@ function filterData(){
     let filtered = fullData.filter(r=>{
         let ok = true;
 
+        // ✅ FIX: convert to number
+        let id = parseInt(r.id);
+
         if(sid && eid){
-            if(r.id < sid || r.id > eid) ok=false;
+            if(id < parseInt(sid) || id > parseInt(eid)) ok = false;
         }
 
+        // ✅ FIX: proper date comparison
         if(sd && ed){
-            if(r.time < sd || r.time > ed) ok=false;
+            let rowTime = new Date(r.time).getTime();
+            let startTime = new Date(sd).getTime();
+            let endTime = new Date(ed).getTime();
+
+            if(rowTime < startTime || rowTime > endTime) ok = false;
         }
 
         return ok;
@@ -136,7 +144,6 @@ function filterData(){
 
     displayData(filtered);
 }
-
 // -------- GRAPH --------
 function generateGraph(){
 
