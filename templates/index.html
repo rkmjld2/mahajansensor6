@@ -131,16 +131,24 @@ function filterData(){
         }
 
         // ✅ FIX: proper date comparison
-        if(sd && ed){
-            let rowTime = new Date(r.time).getTime();
-            let startTime = new Date(sd).getTime();
-            let endTime = new Date(ed).getTime();
+    if(sd && ed){
 
-            if(rowTime < startTime || rowTime > endTime) ok = false;
-        }
+    // Convert input date (YYYY-MM-DDTHH:MM)
+    let startTime = new Date(sd).getTime();
+    let endTime = new Date(ed).getTime();
 
-        return ok;
-    });
+    // Convert row date (DD/MM/YYYY HH:MM)
+    let parts = r.time.split(" ");
+    let d = parts[0].split("/");
+    let t = parts[1];
+
+    let formatted = `${d[2]}-${d[1]}-${d[0]}T${t}`;
+    let rowTime = new Date(formatted).getTime();
+
+    if(rowTime < startTime || rowTime > endTime){
+        ok = false;
+    }
+}
 
     displayData(filtered);
 }
