@@ -136,11 +136,15 @@ def query():
     cmd = request.args.get("cmd")
 
     try:
-        if cmd.startswith("delete"):
-            _, start, end = cmd.split()
+        if not cmd:
+            return "No command"
 
-            start = int(start)
-            end = int(end)
+        parts = cmd.strip().split()
+
+        # -------- DELETE --------
+        if parts[0].lower() == "delete" and len(parts) == 3:
+            start = int(parts[1])
+            end = int(parts[2])
 
             with open(DATA_FILE, "r") as f:
                 rows = list(csv.DictReader(f))
@@ -154,14 +158,28 @@ def query():
 
             return "Deleted"
 
-        elif cmd == "all":
+        # -------- SEARCH --------
+        elif parts[0].lower() == "search" and len(parts) == 3:
+            start = int(parts[1])
+            end = int(parts[2])
+
+            with open(DATA_FILE, "r") as f:
+                rows = list(csv.DictReader(f))
+
+            result = [r for r in rows if start <= int(r["id"]) <= end]
+
+            return jsonify(result)
+
+        # -------- SHOW ALL --------
+        elif parts[0].lower() == "all":
             with open(DATA_FILE, "r") as f:
                 return jsonify(list(csv.DictReader(f)))
 
-        return "Unknown Command"
+        else:
+            return "Unknown Command"
 
     except Exception as e:
-        return str(e)
+        return "Error: " + str(e)
 
 # -------- RUN --------
 if __name__ == "__main__":
