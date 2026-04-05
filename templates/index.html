@@ -147,10 +147,15 @@ function generateGraph(){
     let labels=[], s1=[], s2=[], s3=[];
 
     rows.forEach(r=>{
-        labels.push(r.children[4].innerText);
-        s1.push(parseFloat(r.children[1].innerText));
-        s2.push(parseFloat(r.children[2].innerText));
-        s3.push(parseFloat(r.children[3].innerText));
+        // ✅ ONLY USE VISIBLE ROWS
+        if(r.style.display !== "none"){
+
+            labels.push(r.children[4].innerText);
+            s1.push(parseFloat(r.children[1].innerText));
+            s2.push(parseFloat(r.children[2].innerText));
+            s3.push(parseFloat(r.children[3].innerText));
+
+        }
     });
 
     if(chart) chart.destroy();
@@ -166,8 +171,7 @@ function generateGraph(){
             ]
         }
     });
-}
-
+}    
 // -------- QUERY --------
 async function runQuery(){
     let cmd = document.getElementById("cmd").value;
