@@ -122,22 +122,25 @@ function filterData(){
     let ed = document.getElementById("endDate").value;
 
     let filtered = fullData.filter(r=>{
+
+        let id = parseInt(r.id);
         let ok = true;
 
-        // ✅ FIX: convert to number
-        let id = parseInt(r.id);
-
         if(sid && eid){
-            if(id < parseInt(sid) || id > parseInt(eid)) ok = false;
+            if(id < sid || id > eid) ok = false;
         }
 
-        // ✅ FIX: proper date comparison
         if(sd && ed){
-            let rowTime = new Date(r.time).getTime();
-            let startTime = new Date(sd).getTime();
-            let endTime = new Date(ed).getTime();
+            let parts = r.time.split(" ");
+            let d = parts[0].split("-");
+            let t = parts[1];
 
-            if(rowTime < startTime || rowTime > endTime) ok = false;
+            let rowTime = new Date(`${d[0]}-${d[1]}-${d[2]}T${t}`).getTime();
+
+            if(rowTime < new Date(sd).getTime() ||
+               rowTime > new Date(ed).getTime()){
+                ok = false;
+            }
         }
 
         return ok;
