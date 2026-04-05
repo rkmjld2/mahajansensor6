@@ -145,6 +145,23 @@ function filterData(){
 
     displayData(filtered);
 }
+
+ 
+// VIEW SD DATA
+function loadSD(){
+  fetch('/api/all')
+    .then(r=>r.json())
+    .then(data=>{
+      showTable(data);
+    });
+}
+
+// SYNC BUTTON (instruction only)
+function syncSD(){
+  alert("Type 'sync' in Serial Monitor to upload SD data");
+}
+
+    
 // -------- GRAPH --------
 function generateGraph(){
 
